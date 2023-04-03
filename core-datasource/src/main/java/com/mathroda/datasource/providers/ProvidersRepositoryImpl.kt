@@ -1,6 +1,5 @@
 package com.mathroda.datasource.providers
 
-import androidx.compose.runtime.MutableState
 import com.mathroda.core.state.UserState
 import com.mathroda.core.util.Resource
 import com.mathroda.datasource.firebase.FirebaseRepository
@@ -11,7 +10,7 @@ import javax.inject.Inject
 class ProvidersRepositoryImpl @Inject constructor(
     private val firebase: FirebaseRepository
 ): ProvidersRepository{
-    override suspend fun userStateProvider(
+    override fun userStateProvider(
         function: () -> Unit
     ): Flow<UserState> {
         return flow {

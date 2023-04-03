@@ -10,9 +10,9 @@ import com.github.mikephil.charting.data.Entry
 import com.mathroda.coin_detail.components.TimeRange
 import com.mathroda.coin_detail.state.ChartState
 import com.mathroda.coin_detail.state.CoinState
-import com.mathroda.coin_detail.state.IsFavoriteState
 import com.mathroda.common.events.FavoriteCoinEvents
 import com.mathroda.common.state.DialogState
+import com.mathroda.core.state.IsFavoriteState
 import com.mathroda.core.state.UserState
 import com.mathroda.core.util.Constants.PARAM_COIN_ID
 import com.mathroda.core.util.Resource
@@ -22,8 +22,8 @@ import com.mathroda.datasource.providers.ProvidersRepository
 import com.mathroda.domain.ChartTimeSpan
 import com.mathroda.domain.CoinById
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -59,11 +59,7 @@ class CoinDetailViewModel @Inject constructor(
     val notPremiumDialog: MutableState<DialogState> = _notPremiumDialog
 
     private val _authState = mutableStateOf<UserState>(UserState.UnauthedUser)
-
-    init {
-        updateUserState()
-        updateUiState()
-    }
+    val authState: State<UserState> = _authState
 
     fun updateUiState() {
         savedStateHandle.get<String>(PARAM_COIN_ID)?.let { coinId ->
@@ -77,7 +73,7 @@ class CoinDetailViewModel @Inject constructor(
             when (result) {
                 is Resource.Success -> {
                     _coinState.value = CoinState(coin = result.data)
-                    isFavorite()
+                    updateIsFavoriteState(result.data)
                 }
                 is Resource.Error -> {
                     _coinState.value = CoinState(
@@ -129,7 +125,7 @@ class CoinDetailViewModel @Inject constructor(
        }
     }
 
-    private fun getTimeSpanByTimeRange(timeRange: TimeRange): ChartTimeSpan =
+    fun getTimeSpanByTimeRange(timeRange: TimeRange): ChartTimeSpan =
         when (timeRange) {
             TimeRange.ONE_DAY -> ChartTimeSpan.TIMESPAN_1DAY
             TimeRange.ONE_WEEK -> ChartTimeSpan.TIMESPAN_1WEK
@@ -140,7 +136,6 @@ class CoinDetailViewModel @Inject constructor(
 
     fun onEvent(events: FavoriteCoinEvents) {
         when (events) {
-
             is FavoriteCoinEvents.AddCoin -> {
                 viewModelScope.launch {
                     firebaseRepository.addCoinFavorite(events.coin).collect { result ->
@@ -176,28 +171,28 @@ class CoinDetailViewModel @Inject constructor(
         }
     }
 
-    private suspend fun isFavorite() {
-        _coinState.value.coin?.let { coin ->
-            firebaseRepository.isFavoriteState(coin).firstOrNull()?.let {
-                if (coin.id == it.id) {
+    suspend fun updateIsFavoriteState(
+        coinById: CoinById?
+    ) {
+        coinById?.let { coin ->
+            firebaseRepository.isFavoriteState(coin).collect {
+                if (coin.id == it?.id) {
                     _isFavoriteState.value = IsFavoriteState.Favorite
-                } else {
+                }
+
+                if (coin.id != it?.id) {
                     _isFavoriteState.value = IsFavoriteState.NotFavorite
                 }
             }
         }
     }
 
-    private fun updateUserState() {
-        viewModelScope.launch {
+    fun updateUserState() {
+        viewModelScope.launch(Dispatchers.IO) {
             providersRepository.userStateProvider(
                 function = {}
-            ).collect { userState ->
-                when (userState) {
-                    is UserState.UnauthedUser -> _authState.value = userState
-                    is UserState.AuthedUser -> _authState.value = userState
-                    is UserState.PremiumUser -> _authState.value = userState
-                }
+            ).collect {
+                _authState.value = it
             }
         }
     }

@@ -167,7 +167,7 @@ class FirebaseRepositoryImpl constructor(
     override fun isFavoriteState(coinById: CoinById): Flow<CoinById?> {
         return callbackFlow {
             getUserId()?.let { userId ->
-                fireStore.collection(com.mathroda.core.util.Constants.FAVOURITES_COLLECTION)
+                fireStore.collection(Constants.FAVOURITES_COLLECTION)
                     .document(userId)
                     .collection("coins").document(coinById.name.orEmpty())
                     .addSnapshotListener { value, error ->

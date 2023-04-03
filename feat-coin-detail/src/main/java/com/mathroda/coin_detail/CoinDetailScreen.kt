@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +30,11 @@ fun CoinDetailScreen(
     val coinState = viewModel.coinState.value
     val chartsState = viewModel.chartState.value
     val uriHandler = LocalUriHandler.current
+
+    LaunchedEffect(true) {
+        viewModel.updateUserState()
+        viewModel.updateUiState()
+    }
 
     Box(
         modifier = Modifier
