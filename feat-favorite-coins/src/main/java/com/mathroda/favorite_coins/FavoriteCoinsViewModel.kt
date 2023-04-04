@@ -114,9 +114,7 @@ class FavoriteCoinsViewModel @Inject constructor(
 
       fun userState() {
         viewModelScope.launch {
-           providersRepository.userStateProvider(
-               function = { getAllCoins() }
-           ).collect { userState ->
+           providersRepository.userStateProvider { getAllCoins() }.collect { userState ->
                when(userState) {
                    is UserState.UnauthedUser -> _authState.value = userState
                    is UserState.AuthedUser -> _authState.value = userState

@@ -32,5 +32,7 @@ object Constants {
     const val SIGN_IN_REQUEST = "signInRequest"
     const val SIGN_UP_REQUEST = "signUpRequest"
     const val UPGRADE_TO_PREMIUM = "Upgrade to PREMIUM \n Add more Coins to your List \n ... "
+    const val FAVORITE_MESSAGE = "%s successfully added to favorite!"
+    const val NOT_FAVORITE_MESSAGE = "%s removed from favorite!"
 
 }

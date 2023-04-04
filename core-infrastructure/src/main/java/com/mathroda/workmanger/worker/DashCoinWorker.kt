@@ -30,9 +30,7 @@ class DashCoinWorker @AssistedInject constructor(
     private val marketStatusId = Int.MAX_VALUE
     override suspend fun doWork(): Result {
         return try {
-            providersRepository.userStateProvider(
-               function = {}
-            ).collect { state ->
+            providersRepository.userStateProvider {}.collect { state ->
                 when(state) {
                     is UserState.UnauthedUser -> regularUserNotification(state)
                     is UserState.AuthedUser -> regularUserNotification(state)

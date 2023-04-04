@@ -31,11 +31,11 @@ interface FirebaseRepository {
 
     fun signOut()
 
-    fun addCoinFavorite(coinById: CoinById): Flow<com.mathroda.core.util.Resource<Task<Void>>>
+    fun addCoinFavorite(coinById: CoinById): Flow<Resource<Boolean>>
 
     fun addUserCredential(dashCoinUser: com.mathroda.domain.DashCoinUser): Flow<com.mathroda.core.util.Resource<Task<Void>>>
 
-    fun deleteCoinFavorite(coinById: CoinById): Flow<com.mathroda.core.util.Resource<Task<Void>>>
+    fun deleteCoinFavorite(coinById: CoinById): Flow<Resource<Boolean>>
 
     fun isFavoriteState(coinById: CoinById): Flow<CoinById?>
 

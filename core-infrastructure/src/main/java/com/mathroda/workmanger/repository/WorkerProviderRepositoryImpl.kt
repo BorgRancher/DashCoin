@@ -23,7 +23,7 @@ class WorkerProviderRepositoryImpl @Inject constructor(
 
     override fun createWork() {
         scope.launch {
-            providerRepository.userStateProvider(function = {}).collect { state ->
+            providerRepository.userStateProvider {}.collect { state ->
                 val workRequest = PeriodicWorkRequestBuilder<DashCoinWorker>(
                     repeatInterval = timeLong(state), repeatIntervalTimeUnit = timeUnit(state),
                     flexTimeInterval = timeLong(state), flexTimeIntervalUnit = timeUnit(state)

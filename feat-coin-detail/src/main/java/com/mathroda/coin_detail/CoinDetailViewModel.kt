@@ -14,6 +14,8 @@ import com.mathroda.common.events.FavoriteCoinEvents
 import com.mathroda.common.state.DialogState
 import com.mathroda.core.state.IsFavoriteState
 import com.mathroda.core.state.UserState
+import com.mathroda.core.util.Constants.FAVORITE_MESSAGE
+import com.mathroda.core.util.Constants.NOT_FAVORITE_MESSAGE
 import com.mathroda.core.util.Constants.PARAM_COIN_ID
 import com.mathroda.core.util.Resource
 import com.mathroda.datasource.core.DashCoinRepository
@@ -58,8 +60,8 @@ class CoinDetailViewModel @Inject constructor(
     private val _notPremiumDialog = mutableStateOf<DialogState>(DialogState.Close)
     val notPremiumDialog: MutableState<DialogState> = _notPremiumDialog
 
-    private val _authState = mutableStateOf<UserState>(UserState.UnauthedUser)
-    val authState: State<UserState> = _authState
+    private val _userState = mutableStateOf<UserState>(UserState.UnauthedUser)
+    val userState: State<UserState> = _userState
 
     fun updateUiState() {
         savedStateHandle.get<String>(PARAM_COIN_ID)?.let { coinId ->
@@ -68,12 +70,12 @@ class CoinDetailViewModel @Inject constructor(
         }
     }
 
-    private fun getCoin(coinId: String) {
+    fun getCoin(coinId: String) {
         dashCoinRepository.getCoinById(coinId).onEach { result ->
             when (result) {
                 is Resource.Success -> {
                     _coinState.value = CoinState(coin = result.data)
-                    updateIsFavoriteState(result.data)
+                    getIsFavoriteState(result.data)
                 }
                 is Resource.Error -> {
                     _coinState.value = CoinState(
@@ -88,7 +90,7 @@ class CoinDetailViewModel @Inject constructor(
         }.launchIn(viewModelScope)
     }
 
-    private fun getChart(coinId: String, period: TimeRange) {
+    fun getChart(coinId: String, period: TimeRange) {
         dashCoinRepository.getChartsData(coinId, getTimeSpanByTimeRange(period)).onEach { result ->
             when (result) {
                 is Resource.Success -> {
@@ -142,9 +144,10 @@ class CoinDetailViewModel @Inject constructor(
                         when (result) {
                             is Resource.Success -> {
                                 _favoriteMsg.value = IsFavoriteState.Messages(
-                                    favoriteMessage = "${events.coin.name} successfully added to favorite! "
+                                    favoriteMessage = String.format(FAVORITE_MESSAGE, events.coin.name)
                                 )
-                                _isFavoriteState.value = IsFavoriteState.Favorite
+
+                                updateIsFavoriteState(IsFavoriteState.Favorite)
                             }
                             else-> {}
                         }
@@ -158,9 +161,10 @@ class CoinDetailViewModel @Inject constructor(
                         when(result) {
                             is Resource.Success -> {
                                 _favoriteMsg.value = IsFavoriteState.Messages(
-                                    notFavoriteMessage = "${events.coin.name} removed from favorite! "
+                                    notFavoriteMessage = String.format(NOT_FAVORITE_MESSAGE, events.coin.name)
                                 )
-                                _isFavoriteState.value = IsFavoriteState.NotFavorite
+
+                                updateIsFavoriteState(IsFavoriteState.NotFavorite)
                             }
                             else -> {}
                         }
@@ -171,17 +175,17 @@ class CoinDetailViewModel @Inject constructor(
         }
     }
 
-    suspend fun updateIsFavoriteState(
+    suspend fun getIsFavoriteState(
         coinById: CoinById?
     ) {
         coinById?.let { coin ->
             firebaseRepository.isFavoriteState(coin).collect {
                 if (coin.id == it?.id) {
-                    _isFavoriteState.value = IsFavoriteState.Favorite
+                    updateIsFavoriteState(IsFavoriteState.Favorite)
                 }
 
                 if (coin.id != it?.id) {
-                    _isFavoriteState.value = IsFavoriteState.NotFavorite
+                    updateIsFavoriteState(IsFavoriteState.NotFavorite)
                 }
             }
         }
@@ -192,12 +196,12 @@ class CoinDetailViewModel @Inject constructor(
             providersRepository.userStateProvider(
                 function = {}
             ).collect {
-                _authState.value = it
+               updateUserState(it)
             }
         }
     }
 
-    private fun premiumLimit(coin: CoinById) {
+    fun premiumLimit(coin: CoinById) {
         viewModelScope.launch {
             firebaseRepository.getUserCredentials().collect { result ->
                 result.data?.let { user ->
@@ -218,13 +222,25 @@ class CoinDetailViewModel @Inject constructor(
                 _dialogState.value = DialogState.Open
             }
             is IsFavoriteState.NotFavorite -> {
-                when (_authState.value) {
+                when (_userState.value) {
                     is UserState.UnauthedUser -> _sideEffect.value = !_sideEffect.value
                     is UserState.AuthedUser -> premiumLimit(coin)
                     is UserState.PremiumUser -> onEvent(FavoriteCoinEvents.AddCoin(coin))
                 }
             }
         }
+    }
+
+    fun updateIsFavoriteState(
+        state: IsFavoriteState
+    ){
+        _isFavoriteState.value = state
+    }
+
+    fun updateUserState(
+        state: UserState
+    ){
+        _userState.value = state
     }
 
     private fun addEntry(x: Float, y: Float) = Entry(x, y)

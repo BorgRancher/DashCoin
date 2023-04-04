@@ -4,20 +4,25 @@ import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import com.mathroda.coin_detail.components.TimeRange
 import com.mathroda.coin_detail.util.MainDispatcherRule
+import com.mathroda.common.events.FavoriteCoinEvents
+import com.mathroda.common.state.DialogState
 import com.mathroda.core.state.IsFavoriteState
 import com.mathroda.core.state.UserState
+import com.mathroda.core.util.Constants
+import com.mathroda.core.util.Resource
 import com.mathroda.datasource.core.DashCoinRepository
 import com.mathroda.datasource.firebase.FirebaseRepository
 import com.mathroda.datasource.providers.ProvidersRepository
 import com.mathroda.domain.ChartTimeSpan
+import com.mathroda.domain.Charts
 import com.mathroda.domain.CoinById
+import com.mathroda.domain.DashCoinUser
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
@@ -50,7 +55,7 @@ class CoinDetailViewModelTest {
             dashCoinRepository,
             firebaseRepository,
             providersRepository,
-            savedStateHandle,
+            savedStateHandle
         )
     }
 
@@ -118,7 +123,7 @@ class CoinDetailViewModelTest {
         val coinById = CoinById(id = "bitcoin")
 
         every { firebaseRepository.isFavoriteState(coinById) } returns flowOf(CoinById(id = "bitcoin"))
-        viewModel.updateIsFavoriteState(coinById)
+        viewModel.getIsFavoriteState(coinById)
 
         val actual = viewModel.isFavoriteState.value
         val expected = IsFavoriteState.Favorite
@@ -131,7 +136,7 @@ class CoinDetailViewModelTest {
         val coinById = CoinById(id = "dogecoin")
 
         every { firebaseRepository.isFavoriteState(coinById) } returns flowOf(CoinById(id = "bitcoin"))
-        viewModel.updateIsFavoriteState(coinById)
+        viewModel.getIsFavoriteState(coinById)
 
         val actual = viewModel.isFavoriteState.value
         val expected = IsFavoriteState.NotFavorite
@@ -140,41 +145,258 @@ class CoinDetailViewModelTest {
     }
 
     /**
-     * Updating the user state tests
+     * Testing premium functionality
      */
 
     @Test
-    fun `when user state is UnauthedUser authState value is UnauthedUser`() = runTest {
-        every { providersRepository.userStateProvider {} } returns flowOf(UserState.UnauthedUser)
-        viewModel.updateUserState()
+    fun `when user reached premium limit return dialog state open`() = runTest {
+        // Not premium user can only add 3 coins to their favorite
 
-        val actual = viewModel.authState.value
-        val expected = UserState.UnauthedUser
+        val user = DashCoinUser(favoriteCoinsCount = 4)
+        val coin = CoinById()
+
+        every { firebaseRepository.getUserCredentials() } returns flow { emit(Resource.Success(user)) }
+        viewModel.premiumLimit(coin)
+
+        val actual = viewModel.notPremiumDialog.value
+        val expected = DialogState.Open
 
         assertThat(actual).isEqualTo(expected)
     }
 
     @Test
-    fun `when user state is AuthedUser authState value is AuthedUser`() = runTest {
-        backgroundScope.launch(Dispatchers.IO) {
-            every { providersRepository.userStateProvider {} } returns flowOf(UserState.AuthedUser)
-            viewModel.updateUserState()
+    fun `when user did ot reach premium limit add coin return favorite state IsFavorite`() = runTest {
+        // Not premium user can only add 3 coins to their favorite
 
-            val actual = viewModel.authState.value
-            val expected = UserState.AuthedUser
+        val user = DashCoinUser(favoriteCoinsCount = 2)
+        val coin = CoinById()
 
-            assertThat(actual).isEqualTo(expected)
-        }
+        every { firebaseRepository.getUserCredentials() } returns flow { emit(Resource.Success(user)) }
+        viewModel.premiumLimit(coin)
+
+        viewModel.onEvent(FavoriteCoinEvents.AddCoin(coin))
+
+        val actual = viewModel.notPremiumDialog.value
+        val expected = DialogState.Close
+
+        assertThat(actual).isEqualTo(expected)
+    }
+
+
+    /**
+     * Testing onFavoriteClick Functionality
+     */
+
+    @Test
+    fun `when favorite state is Favorite`() = runTest {
+        val coin = CoinById()
+
+        viewModel.updateIsFavoriteState(IsFavoriteState.Favorite)
+        viewModel.onFavoriteClick(coin)
+
+        val actual = viewModel.dialogState.value
+        val expected = DialogState.Open
+
+        assertThat(actual).isEqualTo(expected)
     }
 
     @Test
-    fun `when user state is PremiumUser authState value is PremiumUser`() = runTest {
-        every { providersRepository.userStateProvider {} } returns flowOf(UserState.PremiumUser)
-        viewModel.updateUserState()
+    fun `when favorite state is NotFavorite and user is UnauthedUser`() = runTest {
+        val coin = CoinById()
 
-        val actual = viewModel.authState.value
-        val expected = UserState.PremiumUser
+        viewModel.updateIsFavoriteState(IsFavoriteState.NotFavorite)
+        viewModel.updateUserState(UserState.UnauthedUser)
+        viewModel.onFavoriteClick(coin)
 
-        assertThat(actual).isEqualTo(expected)
+        val dialogState = viewModel.dialogState.value
+        val sideEffect = viewModel.sideEffect.value
+
+
+        assertThat(dialogState).isEqualTo(DialogState.Close)
+        assertThat(sideEffect).isTrue()
+    }
+
+    @Test
+    fun `when favorite state is NotFavorite and user is AuthedUser`() = runTest {
+        val coin = CoinById()
+
+        viewModel.updateIsFavoriteState(IsFavoriteState.NotFavorite)
+        viewModel.updateUserState(UserState.AuthedUser)
+        viewModel.onFavoriteClick(coin)
+
+        val dialogState = viewModel.dialogState.value
+        val sideEffect = viewModel.sideEffect.value
+
+
+        assertThat(dialogState).isEqualTo(DialogState.Close)
+        assertThat(sideEffect).isFalse()
+    }
+
+    @Test
+    fun `when favorite state is NotFavorite and user is PremiumUser`() = runTest {
+        val coin = CoinById()
+
+        viewModel.updateIsFavoriteState(IsFavoriteState.NotFavorite)
+        viewModel.updateUserState(UserState.PremiumUser)
+        viewModel.onFavoriteClick(coin)
+
+        val dialogState = viewModel.dialogState.value
+        val sideEffect = viewModel.sideEffect.value
+
+
+        assertThat(dialogState).isEqualTo(DialogState.Close)
+        assertThat(sideEffect).isFalse()
+    }
+
+    /**
+     * Testing onEvent Functionality
+     */
+
+    @Test
+    fun `when event is AddCoin and result is Success`() = runTest {
+        val coin = CoinById(name = "Bitcoin")
+        every { firebaseRepository.addCoinFavorite(coin) } returns flowOf(Resource.Success(true))
+        viewModel.onEvent(FavoriteCoinEvents.AddCoin(coin))
+
+        val favoriteMsgState = viewModel.favoriteMsg.value
+        val favoriteState = viewModel.isFavoriteState.value
+
+        val expectedFavoriteMsg = IsFavoriteState.Messages(
+            favoriteMessage = String.format(Constants.FAVORITE_MESSAGE, coin.name)
+        )
+        val expectedFavoriteState = IsFavoriteState.Favorite
+
+        assertThat(favoriteMsgState).isEqualTo(expectedFavoriteMsg)
+        assertThat(favoriteState).isEqualTo(expectedFavoriteState)
+    }
+
+    @Test
+    fun `when event is DeleteCoin and result is Success`() = runTest {
+        val coin = CoinById(name = "Bitcoin")
+        every { firebaseRepository.deleteCoinFavorite(coin) } returns flowOf(Resource.Success(true))
+        viewModel.onEvent(FavoriteCoinEvents.DeleteCoin(coin))
+
+        val favoriteMsgState = viewModel.favoriteMsg.value
+        val favoriteState = viewModel.isFavoriteState.value
+
+        val expectedFavoriteMsg = IsFavoriteState.Messages(
+            notFavoriteMessage = String.format(Constants.NOT_FAVORITE_MESSAGE, coin.name)
+        )
+        val expectedFavoriteState = IsFavoriteState.NotFavorite
+
+        assertThat(favoriteMsgState).isEqualTo(expectedFavoriteMsg)
+        assertThat(favoriteState).isEqualTo(expectedFavoriteState)
+    }
+
+    /**
+     * testing getCoin Functionality
+     */
+
+    @Test
+    fun `when getCoin Called and result is Success`() = runTest {
+        val id = "bitcoin"
+        val coin = CoinById(id = id)
+
+        every { dashCoinRepository.getCoinById(id) } returns flowOf(Resource.Success(coin))
+        viewModel.getCoin(id)
+
+
+        val state = viewModel.coinState.value
+
+        assertThat(state.coin).isNotNull()
+        assertThat(state.error).isEmpty()
+        assertThat(state.isLoading).isFalse()
+    }
+
+    @Test
+    fun `when getCoin Called and result is Error`() = runTest {
+        val id = "bitcoin"
+
+        every { dashCoinRepository.getCoinById(id) } returns flowOf(Resource.Error("Error"))
+        viewModel.getCoin(id)
+
+
+        val state = viewModel.coinState.value
+
+        assertThat(state.coin).isNull()
+        assertThat(state.error).isNotEmpty()
+        assertThat(state.isLoading).isFalse()
+    }
+
+    @Test
+    fun `when getCoin Called and result is Loading`() = runTest {
+        val id = "bitcoin"
+
+        every { dashCoinRepository.getCoinById(id) } returns flowOf(Resource.Loading())
+        viewModel.getCoin(id)
+
+
+        val state = viewModel.coinState.value
+
+        assertThat(state.coin).isNull()
+        assertThat(state.error).isEmpty()
+        assertThat(state.isLoading).isTrue()
+    }
+
+    /**
+     * testing getChart Functionality
+     */
+
+    @Test
+    fun `when getChart Called and result is Success`() = runTest {
+        val id = "bitcoin"
+        val period = ChartTimeSpan.TIMESPAN_1DAY
+        val timeRange = TimeRange.ONE_DAY
+        val data = listOf(
+            listOf(0.1f, 0.2f, 0.3f, 0.4f),
+            listOf(0.1f, 0.2f, 0.3f, 0.4f),
+            listOf(0.1f, 0.2f, 0.3f, 0.4f),
+            listOf(0.1f, 0.2f, 0.3f, 0.4f)
+        )
+        val charts = Charts(chart = data  )
+
+        every { dashCoinRepository.getChartsData(id, period) } returns flowOf(Resource.Success(charts))
+        viewModel.getChart(id, timeRange)
+
+
+        val state = viewModel.chartState.value
+
+        assertThat(state.chart).isNotEmpty()
+        assertThat(state.error).isEmpty()
+        assertThat(state.isLoading).isFalse()
+    }
+
+    @Test
+    fun `when getChart Called and result is Error`() = runTest {
+        val id = "bitcoin"
+        val period = ChartTimeSpan.TIMESPAN_1DAY
+        val timeRange = TimeRange.ONE_DAY
+
+        every { dashCoinRepository.getChartsData(id, period) } returns flowOf(Resource.Error("Error"))
+        viewModel.getChart(id, timeRange)
+
+
+        val state = viewModel.chartState.value
+
+        assertThat(state.chart).isEmpty()
+        assertThat(state.error).isNotEmpty()
+        assertThat(state.isLoading).isFalse()
+    }
+
+    @Test
+    fun `when getChart Called and result is Loading`() = runTest {
+        val id = "bitcoin"
+        val period = ChartTimeSpan.TIMESPAN_1DAY
+        val timeRange = TimeRange.ONE_DAY
+
+        every { dashCoinRepository.getChartsData(id, period) } returns flowOf(Resource.Loading())
+        viewModel.getChart(id, timeRange)
+
+
+        val state = viewModel.chartState.value
+
+        assertThat(state.chart).isEmpty()
+        assertThat(state.error).isEmpty()
+        assertThat(state.isLoading).isTrue()
     }
 }

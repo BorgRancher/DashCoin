@@ -1,7 +1,6 @@
 package com.mathroda.profile_screen
 
 import android.graphics.Bitmap
-import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -14,9 +13,12 @@ import com.mathroda.domain.DashCoinUser
 import com.mathroda.profile_screen.drawer.state.UpdatePictureState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import java.util.UUID
+import java.util.*
 import javax.inject.Inject
 
 @HiltViewModel
@@ -59,9 +61,7 @@ class ProfileViewModel @Inject constructor(
 
     fun uiState() {
         viewModelScope.launch {
-            providersRepository.userStateProvider(
-              function = {}
-            ).collect {userState ->
+            providersRepository.userStateProvider {}.collect { userState ->
                 when(userState) {
                     is UserState.UnauthedUser -> _authState.value = userState
                     is UserState.AuthedUser -> _authState.value = userState

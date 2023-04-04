@@ -111,19 +111,19 @@ class FirebaseRepositoryImpl constructor(
         return firebaseAuth.signOut()
     }
 
-    override fun addCoinFavorite(coinById: CoinById): Flow<com.mathroda.core.util.Resource<Task<Void>>> {
+    override fun addCoinFavorite(coinById: CoinById): Flow<Resource<Boolean>> {
         return flow {
             emit(Resource.Loading())
             getUserId()?.let { userUid ->
                 val favoriteRef =
-                    fireStore.collection(com.mathroda.core.util.Constants.FAVOURITES_COLLECTION)
+                    fireStore.collection(Constants.FAVOURITES_COLLECTION)
                         .document(userUid)
-                        .collection("coins").document(coinById.name.orEmpty())
+                        .collection("coins").document(coinById.name)
                         .set(coinById)
 
                 favoriteRef.await()
 
-                emit(Resource.Success(favoriteRef))
+                emit(Resource.Success(true))
             }
         }.catch {
             emit(Resource.Error(it.message ?: "Unexpected Message"))
@@ -146,7 +146,7 @@ class FirebaseRepositoryImpl constructor(
         }
     }
 
-    override fun deleteCoinFavorite(coinById: CoinById): Flow<com.mathroda.core.util.Resource<Task<Void>>> {
+    override fun deleteCoinFavorite(coinById: CoinById): Flow<Resource<Boolean>> {
         return flow {
             emit(Resource.Loading())
             getUserId()?.let {
@@ -157,7 +157,7 @@ class FirebaseRepositoryImpl constructor(
                         .delete()
 
                 favoriteRef.await()
-                emit(Resource.Success(favoriteRef))
+                emit(Resource.Success(true))
             }
         }.catch {
             emit(Resource.Error(it.toString()))
