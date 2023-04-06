@@ -30,13 +30,6 @@ class CoinsViewModel @Inject constructor(
     private val _isRefresh = MutableStateFlow(false)
     val isRefresh: StateFlow<Boolean> = _isRefresh
 
-
-    init {
-        if (_state.value.coins.isEmpty()) {
-            getCoins()
-        }
-    }
-
     fun getCoins() {
        dashCoinRepository.getCoins(skip = _paginationState.value.skip)
            .distinctUntilChanged()
@@ -57,60 +50,45 @@ class CoinsViewModel @Inject constructor(
         }
     }
 
-    private fun onRequestSuccess(
+    fun onRequestSuccess(
         data: List<Coins>
     ) {
-        _state.update {
-            it.copy(
-                coins = it.coins + data,
-                isLoading = false,
-                error = ""
-            )
-        }
+        updateState(
+            coins = _state.value.coins + data,
+        )
 
         val listSize = _state.value.coins.size
-        _paginationState.update {
-            it.copy(
-                skip = listSize,
-                endReached = data.isEmpty() || listSize == COINS_LIMIT,
-                isLoading = false
-            )
-        }
+
+        updatePaginationState(
+            skip = listSize,
+            endReached = data.isEmpty() || listSize >= COINS_LIMIT,
+            isLoading = false
+        )
     }
 
-    private fun onRequestError(
+    fun onRequestError(
         message: String?
     ) {
-        _state.update {
-            it.copy(
-                error = message ?: "Unexpected Error",
-                isLoading = false,
-            )
-        }
+        updateState(
+            error = message ?: "Unexpected Error Occurred"
+        )
     }
-    private fun onRequestLoading() {
+    fun onRequestLoading() {
         if (_state.value.coins.isEmpty()) {
-            _state.update {
-                it.copy(
-                    isLoading = true
-                )
-            }
+            updateState(isLoading = true)
+            return
         }
 
-        if (_state.value.coins.isNotEmpty()) {
-            _paginationState.update {
-                it.copy(
-                    isLoading = true
-                )
-            }
-        }
+        updatePaginationState(
+            isLoading = true
+        )
     }
 
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             updateRefreshState(true)
-            _paginationState.update { it.copy(skip = 0) }
-            _state.update { it.copy(coins = emptyList()) }
+            updatePaginationState()
+            updateState()
             getCoins()
             updateRefreshState(false)
         }
@@ -120,6 +98,34 @@ class CoinsViewModel @Inject constructor(
     private fun updateRefreshState(
         value: Boolean
     ) = _isRefresh.update { value }
+
+    fun updateState(
+        isLoading: Boolean = false,
+        coins: List<Coins> = emptyList(),
+        error: String = ""
+    ) {
+        _state.update {
+            it.copy(
+                isLoading = isLoading,
+                coins = coins,
+                error = error
+            )
+        }
+    }
+
+    fun updatePaginationState(
+        skip: Int = 0,
+        endReached: Boolean = false,
+        isLoading: Boolean = false
+    ) {
+        _paginationState.update {
+            it.copy(
+                skip = skip,
+                endReached = endReached,
+                isLoading = isLoading
+            )
+        }
+    }
 
     companion object {
         const val COINS_LIMIT = 400

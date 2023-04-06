@@ -48,6 +48,12 @@ fun CoinScreen(
     val focusManger = LocalFocusManager.current
     val lazyListState = rememberLazyListState()
 
+    LaunchedEffect(true) {
+        if (state.value.coins.isEmpty()){
+            viewModel.getCoins()
+        }
+    }
+
     Scaffold(
         scaffoldState = scaffoldState,
         topBar = {
@@ -69,10 +75,11 @@ fun CoinScreen(
         drawerGesturesEnabled = scaffoldState.drawerState.isOpen,
         drawerScrimColor = com.mathroda.common.theme.LightGray
 
-    ) {
+    )  { paddingValues ->
         Box(
             modifier = Modifier
                 .background(com.mathroda.common.theme.DarkGray)
+                .padding(paddingValues)
                 .fillMaxSize()
         ) {
             Column {
